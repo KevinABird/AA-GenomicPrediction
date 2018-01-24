@@ -1,0 +1,72 @@
+---
+title: "Bird et al. PCA"
+author: "S. Turner"
+date: "January 23, 2018"
+output: html_document
+---
+
+```{r full_data}
+library(pcadapt)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(lattice)
+library(RColorBrewer)
+
+path_to_full <- "/home/sarahturner/Documents/Bird_et_al/plinkGeneOmeSubset.ped"
+full <- read.pcadapt(path_to_full, type="ped")
+full_x <- pcadapt(full, K=20)
+
+plot(full_x, option="screeplot")
+plot(full_x, option="scores")
+
+# color palette
+colorpal <- brewer.pal(4, "Dark2")
+
+p_full <- ggplot(as.data.frame(full_x$scores), aes(V1,V2)) + 
+  geom_point(colour=colorpal[4]) +
+  xlab("PC1") + ylab("PC2") +
+  ggtitle("Full SNP Set")
+
+p_full
+```
+
+```{r amino acid subset}
+path_to_AAS <- "/home/sarahturner/Documents/Bird_et_al/plinkAASubset.ped"
+AAS <- read.pcadapt(path_to_AAS, type="ped")
+AAS_x  <- pcadapt(AAS, K=20)
+
+p_aas <- ggplot(as.data.frame(AAS_x$scores), aes(V1,V2)) +
+  geom_point(colour=colorpal[1]) +
+  xlab("PC1") + ylab("PC2") +
+  ggtitle("Amino Acid Subset")
+
+p_aas
+
+```
+
+```{r control subsets}
+path <- list()
+p_control <- list()
+
+control_samp <- as.character(sample(1:1000, 10, replace=FALSE))
+
+for (i in control_samp) {
+  path[[i]] <- paste("/home/sarahturner/Documents/Bird_et_al/plink_subsets/plinkrandomSubset_", i, ".ped", sep="")
+  print(path[[i]])
+  control <- read.pcadapt(path[[i]], type="ped")
+  control_x <- pcadapt(control, K=20)
+  p_control[[i]] <- ggplot(as.data.frame(control_x$scores), aes(V1,V2)) +
+    geom_point(colour=colorpal[2]) + 
+    xlab("PC1") + ylab("PC2") +
+    ggtitle(paste("Control SNP Set", i, sep=" "))
+}
+
+```
+
+```{r make the plot!}
+
+grid.arrange(p_full, p_aas, p_control[[1]], p_control[[2]], p_control[[3]], p_control[[4]], p_control[[5]], p_control[[6]],
+             p_control[[7]], p_control[[8]], p_control[[9]], p_control[[10]])
+
+```
