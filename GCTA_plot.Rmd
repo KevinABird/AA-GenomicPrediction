@@ -1,5 +1,5 @@
 ---
-title: "BirdetAlFigS2"
+title: "GCTA_plot"
 author: "Kevin Bird"
 date: "February 14, 2018"
 output: html_document
