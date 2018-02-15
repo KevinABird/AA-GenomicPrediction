@@ -1,0 +1,94 @@
+---
+title: "BirdetAlFigS2"
+author: "Kevin Bird"
+date: "February 14, 2018"
+output: html_document
+---
+
+Generate dataframes
+```{r}
+library(readr)
+library(plyr)
+library(ggplot2)
+library(cowplot)
+RandomH2 <- list.files(path="C:\\Users/Kevin/Documents/At-GenomicSelection-Ruthie",
+    pattern="*H2.txt")
+
+for(i in RandomH2){
+    filepath <- file.path("C:\\Users/Kevin/Documents/At-GenomicSelection-Ruthie",paste(i))
+    assign(i, read.delim(filepath,
+    sep = "\t",header = F,col.names = c("File","h2","SE")))
+}
+AlaH2.txt$Subset<-"CS"
+ArgH2.txt$Subset<-"CS"
+AspH2.txt$Subset<-"CS"
+GluH2.txt$Subset<-"CS"
+GlnH2.txt$Subset<-"CS"
+GlyH2.txt$Subset<-"CS"
+LeuH2.txt$Subset<-"CS"
+LysH2.txt$Subset<-"CS"
+IleH2.txt$Subset<-"CS"
+HisH2.txt$Subset<-"CS"
+MetH2.txt$Subset<-"CS"
+ProH2.txt$Subset<-"CS"
+PheH2.txt$Subset<-"CS"
+SerH2.txt$Subset<-"CS"
+ThrH2.txt$Subset<-"CS"
+TyrH2.txt$Subset<-"CS"
+TrpH2.txt$Subset<-"CS"
+ValH2.txt$Subset<-"CS"
+TotalH2.txt$Subset<-"CS"
+
+AlaH2.txt$AA<-"Ala"
+ArgH2.txt$AA<-"Arg"
+AspH2.txt$AA<-"Asp"
+GlyH2.txt$AA<-"Gly"
+GluH2.txt$AA<-"Glu"
+GlnH2.txt$AA<-"Gln"
+HisH2.txt$AA<-"His"
+IleH2.txt$AA<-"Ile"
+LeuH2.txt$AA<-"Leu"
+LysH2.txt$AA<-"Lys"
+MetH2.txt$AA<-"Met"
+PheH2.txt$AA<-"Phe"
+ProH2.txt$AA<-"Pro"
+SerH2.txt$AA<-"Ser"
+TrpH2.txt$AA<-"Trp"
+TyrH2.txt$AA<-"Tyr"
+ThrH2.txt$AA<-"Thr"
+TotalH2.txt$AA<-"TFAA"
+ValH2.txt$AA<-"Val"
+
+#construct AAS dataframe
+ AASubsetAll <- read_delim("~/At-GenomicSelection-Ruthie/AASubsetGeno/AASubsetGCTAOut/AASubsetAll.txt", 
+     "\t", escape_double = FALSE, col_names = c("Subset","AA","h2","SE"), 
+     trim_ws = TRUE)  
+ #Construct GS dataframe
+ Genic_all <- read_delim("~/At-GenomicSelection-Ruthie/GenicGeno/GeneOmeGCTAOut/Genic_all.txt", 
+     "\t", escape_double = FALSE, col_names = c("Subset","AA","h2","SE"), 
+    trim_ws = TRUE)
+
+ #reorder GS and AAS dataframes
+Genic_all<-Genic_all[,c(3,4,1,2)]
+AASubsetAll<-AASubsetAll[,c(3,4,1,2)]
+
+#Combine individual AA CS dataframes to make single CS dataframe
+RandomGCTAData<-do.call("rbind",list(AlaH2.txt,ArgH2.txt,AspH2.txt,GlnH2.txt,GluH2.txt,GlyH2.txt,HisH2.txt,IleH2.txt,LeuH2.txt,LysH2.txt,MetH2.txt,PheH2.txt,ProH2.txt,SerH2.txt,ThrH2.txt,TrpH2.txt,TyrH2.txt,ValH2.txt,TotalH2.txt))
+
+```
+
+Calculate mean and SE for CS,AAS,and GD dataframes
+```{r}
+means.sem <- ddply(RandomGCTAData, c("Subset", "AA"), summarise,
+                   h2=mean(h2), SE=mean(SE))
+GCTAData<-rbind(means.sem,Genic_all,AASubsetAll)
+GCTAData <- transform(GCTAData, lower=h2-SE, upper=h2+SE)
+
+```
+Generate figure
+```{r}
+FigS2<-ggplot(GCTAData,aes(x=AA,y=h2,fill=Subset))+scale_fill_manual(values=c("#66C2A5", "#FC8D62", "#E78AC3"))+geom_bar(width=0.8,stat="identity",position = "dodge")+geom_errorbar(aes(ymax=upper,ymin=lower),size=0.5,width=0.4,position=position_dodge(0.8))+labs(x="Subset", y = "heritability") + guides(fill=guide_legend(title="Subset"))+theme(plot.title = element_text(hjust=0.5))
+
+ggsave('FigS2.png',plot=FigS2,width = 30,height=12,units="cm")
+```
+
