@@ -1,0 +1,151 @@
+---
+title: "Plot GFBLUP Results"
+author: "S. Turner"
+date: "February 20, 2018"
+output: html_document
+---
+## Summary
+This script compiles and plots results for the proportion of genomic variance explained by the GS, AAS, and CS subsets using GFBLUP. 
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir="~/Documents/AA-GenomicPrediction/")
+library(data.table)
+library(ggplot2)
+library(RColorBrewer)
+library(cowplot)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(gridExtra)
+```
+
+## Compile results for the proportion of genomic variance explained for all AA traits
+Note that sigma results were moved to a single directory for convenience
+
+```{r compile sigmas}
+## First part only necessary if converting from .txt to .csv
+# files <- dir(path="./gfblup_results/sigma_out/", pattern="*.txt", full.names=TRUE)
+# files
+# 
+# # convert files to .csv
+# for (i in 1:length(files)) {
+#   file=read.table(file=files[i], header=T)
+#   write.csv(file, file=paste0(sub(".txt","", files[i]), ".csv"))
+# }
+
+data_path <- "./gfblup_results/sigma_out/"
+files <- dir(path=data_path, pattern="*.csv")
+files
+
+# combine output into single data frame
+sigmas <- data_frame(filename=files) %>%
+  mutate(file_contents=map(filename, ~ read_csv(file.path(data_path, .))))
+
+sigmas <- unnest(sigmas)
+
+# set column names
+colnames(sigmas) <- c("AA", "n", "GS", "AAS", "C", "e")
+
+# replace file names with only AA trait name
+sigmas$AA <- gsub(pattern="sigmas_|.csv", "", sigmas$AA)
+sigmas$AA <- as.factor(sigmas$AA)
+sigmas$AA <- recode(sigmas$AA, "ala"="Ala", "arg"="Arg", "asp"="Asp", "gln"="Gln", "glu"="Glu",
+                                       "his"="His", "ile"="Ile", "leu"="Leu", "lys"="Lys", "met"="Met",
+                                       "phe"="Phe", "pro"="Pro", "ser"="Ser", "thr"="Thr", "trp"="Trp",
+                                       "try"="Tyr", "val"="Val", "Total"="TFAA")
+
+# remove AA family phenotypes (not of interest for this study)
+sigmas <- subset(sigmas, ! AA %in% c("AspFam_Asp", "AspFam", "BCAA", "GluFam", "GluFam_glu", 
+                                        "PyrFam", "SerFam", "ShikFam"))
+sigmas <- droplevels(sigmas)
+```
+
+## Calculate the proportion of genomic variance explained by AAS and CS subsets
+Also take the difference between h_AAS^2 and h_CS^2
+```{r proportion of genomic variance explained}
+# calculate proportion of genomic variance explained for AAS and CS subsets and difference
+sigmas$AASprop <- sigmas$AAS/(sigmas$GS+sigmas$AAS+sigmas$C)
+sigmas$CSprop <- sigmas$C/(sigmas$GS+sigmas$AAS+sigmas$C)
+sigmas$h2_diff <- sigmas$AASprop - sigmas$CSprop
+```
+
+## Load genomic prediction results from GAPIT
+```{r gblup results}
+gp_results <- read.table("./gfblup_results/AAS_GSdf.txt", header=TRUE)
+gp_results$n <- rep(1:1000) # dummy variable to merge with GFBLUP output
+```
+
+## Merge results from GBLUP and from GFBLUP
+```{r merge results}
+# reorder amino acid traits by difference in predictive ability from GAPIT
+# sigmas$AA <- reorder(sigmas$AA, reorder(gp_results$AA, -gp_results$Diff))
+sigmas$h2_diff[sigmas$h2_diff==1] <- NA # set outliers to NA
+
+merged <- merge(sigmas, gp_results, by=c("AA", "n"))
+
+# set factor levels for amino acid traits
+merged$AA <- factor(merged$AA, levels=c("Ala", "Arg", "Asp", "Gln", "Glu", "Gly", "His", "Ile", "Leu", "Lys", "Met", "Phe",
+                       "Pro", "Ser", "Thr", "Trp", "Tyr", "Val", "TFAA"))
+```
+
+## Define colors for amino acid traits
+```{r color palette}
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+myColors <- colorRampPalette(cbPalette)(19)
+names(myColors) <- levels(merged$AA)
+colScale <- scale_fill_manual(name="", values=myColors)
+```
+
+## Create a uniform legend for combining plots
+```{r create legend for plotting}
+# function to extract legend
+g_legend <- function(a.gplot) {
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+leg <- ggplot(merged, aes(AA, h2_diff, fill=AA)) + geom_boxplot() + colScale + theme_bw()
+leg
+my_legend <- g_legend(leg)
+```
+## Plot difference in predictive ability between AAS and CS subsets (from GAPIT)
+Figure 2A in manuscript
+
+```{r fig2A}
+p1 <- ggplot(merged, aes(reorder(AA, -Diff), Diff, fill=AA)) +
+  geom_hline(yintercept=0, colour="gray", size=1.5) +
+  geom_boxplot(outlier.size=0.5)
+
+p1 <- p1 + colScale + theme_bw() +
+  labs(x="Amino Acid", y=expression(r[AAS]-r[CS])) + 
+  theme(legend.position="none") 
+
+p1 <- ggdraw(p1) + draw_plot_label("A")
+p1
+```
+## Plot difference in proportion of genomic variance explained by AAS vs. CS subsets (from GFBLUP)
+Figure 2B in manuscript 
+
+```{r fig2B}
+p2 <- ggplot(merged, aes(reorder(AA, -Diff), h2_diff, fill=AA)) +
+  geom_hline(yintercept=0, colour="gray", size=1.5) +
+  geom_boxplot(outlier.size=0.5) 
+
+p2 <- p2 + colScale + theme_bw() +
+  labs(x="Amino Acid", y=expression(paste(h[AAS]^{2}-h[CS]^{2}))) + theme(legend.position="none")
+
+p2 <- ggdraw(p2) + draw_plot_label("B")
+
+p2
+```
+
+## Export figure!
+```{r export fig 2}
+# setEPS()
+png("./figures/Fig2.png", width=7.5, height=7.5, units="in", res=300)
+grid.arrange(p1, p2, my_legend, ncol=2, nrow=2, layout_matrix = rbind(c(1,3), c(2,3)), widths=c(4,0.5))
+dev.off()
+```
