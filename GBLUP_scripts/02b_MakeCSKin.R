@@ -18,7 +18,7 @@ source("http://www.zzlab.net/GAPIT/emma.txt")
 source("http://www.zzlab.net/GAPIT/gapit_functions.txt")
 
 random_geno_list<-list()
-for(n in seq(132)) {
+for(n in seq(1000)) {
 random_geno_list[[n]] <- sprintf('randomSubset_%s', n)
 }
 for(file in random_geno_list) {
