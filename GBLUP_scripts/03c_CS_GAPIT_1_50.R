@@ -9,7 +9,7 @@ library("scatterplot3d")
 source("http://www.zzlab.net/GAPIT/emma.txt")
 source("http://www.zzlab.net/GAPIT/gapit_functions.txt")
 
-for(number in c(51:100)){
+for(number in c(1:50)){
 AAabs <-read.csv("/home/birdk/data/AfterBlupsAbsLevels04222014.csv",head=T)
 myKI <-read.csv(sprintf("/home/birdk/data/AARandomGeneration/randomSubset_%s/GAPIT.Kin.VanRaden.csv",number), head=FALSE)
 
@@ -17,7 +17,7 @@ myKI <-read.csv(sprintf("/home/birdk/data/AARandomGeneration/randomSubset_%s/GAP
 
 t=100 #total replicates
 s=1/3 #sample of inference, e.g. set it to 1/5 for five fold cross validation
-Y.raw=as.data.frame(AAabs[,c(1,20)]) #choose a trait
+Y.raw=as.data.frame(AAabs[,c(1,2)]) #choose a trait
 Y.raw=Y.raw[!is.na(Y.raw[,2]),] #Remove missing data
 n=nrow(Y.raw)
 n.missing=round(n*s)
@@ -54,5 +54,5 @@ storage.inf[rep,1]=r.inf
 }#End of for (rep in 1:t)
 storage=cbind(storage.ref,storage.inf)
 colnames(storage)=c("Reference","Inference")
-write.table(storage, file=sprintf("RandomSubset%s_%s_GAPIT.Cross.Validation.txt",number,colnames(AAabs)[20]), quote = FALSE, sep = "\t", row.names = TRUE,col.names = NA)
+write.table(storage, file=sprintf("RandomSubset%s_%s_GAPIT.Cross.Validation.txt",number,colnames(AAabs)[2]), quote = FALSE, sep = "\t", row.names = TRUE,col.names = NA)
 }
