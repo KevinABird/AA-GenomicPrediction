@@ -1,0 +1,274 @@
+---
+title: "Arabidopsis genomic prediction"
+output: 
+  html_notebook: 
+    toc: yes
+---
+This notebook includes a trial run of GBLUP using two methods: rrBLUP and a likelihood based genomic feature model. The trait in this case is total free amino acid content in dry Arabidopsis seeds, which has an estimated predictive accuracy of ~0.4 using standard GBLUP through GAPIT. 
+
+## Project goal
+* partition genomic variance into SNP categories based on metabolic pathway annotations, statistics of interest include:  
+    - proportion of genomic variance explained (h^2)  
+    - likelihood ratio test (base GBLUP model where all SNPs contribute equally vs. partitioning kinship matrices)  
+    - predictive accuracy (expect higher if a causal SNP is in the genomic feature set)   
+* want to model after Edwards et al. (2015) Partitioning of genomic variance reveals biological pathways associated with udder health and milk production traits in dairy cattle
+
+## Methods
+* **GAPIT**
+    - ran GBLUP model using all SNPs, a subset of SNPs in the amino acid pathway (7667 SNPs), and 1000 'control subsets' (7667 SNPs each) 
+    - compared predictive accuracies
+
+* **Genomic feature model**
+    - follows approaches in several papers (Edwards et al. 2015, Edwards et al. 2016) 
+    - implemented in `qgg` package
+    - partitions genomic variance into 'genomic features', in our case annotation categories
+    - running into issues 
+    
+* **LDAK** (dougspeed.com/ldak/)
+    - another method to estimate contribution of SNP subsets to heritability
+    - model is running successfully (yay) but need to figure out cross-validation to estimate predictive ability
+
+## Issues/questions 
+
+**Major holdup is troubleshooting genomic feature model and cross validation** 
+
+* The genomic feature model provides much lower predictive accuracy (essentially zero) compared to results from GAPIT (not shown) and rrBLUP. 
+    - would like to simulate different scenarios to test performance (e.g. known predictive ability of 0.5, etc.)
+* Cross-validation approaches: 
+    - for rrBLUP, not currently performing a true 3-fold cross-validation with one fold hold out (just 100 replications of randomly selected individuals for training/validation sets) 
+    - have an example of cross-validation in LDAK but do not totally understand how to implement it (see slides 85 and 86 on dougspeed.com/wp-content/uploads/tartu_practical.pdf)
+
+
+
+## rrBLUP
+Run standard GBLUP using the rrBLUP package (ridge regression BLUP) - using as a check to compare with genomic feature model
+```{r load packages, include = FALSE}
+library(rrBLUP)
+library(snpStats)
+library(snpReady)
+library(tidyverse)
+library(qgg)
+```
+
+```{r read in genotype matrix}
+# read in and format SNP data (must be {-1, 0, 1} format)
+plink_file <- read.plink(bed = "data/input_nomissing.bed", 
+                   bim = "data/input_nomissing.bim",
+                   fam = "data/input_nomissing.fam")
+
+W <- coerce(plink_file$genotypes, to = "character")
+
+W[W == "A/A"] <- -1 # homozygous AA 
+W[W == "A/B"] <- 0 # heterozygote AB
+W[W == "B/B"] <- 1 # homozygous BB
+
+mode(W) <- "numeric"
+
+rownames(W) <- paste0("A", rownames(W)) # append A to rownames
+
+W[1:10,1:10]
+
+```
+
+```{r}
+# read in phenotype file as matrix
+pheno <- as.matrix(read.csv("/home/turnersa/Documents/AA-GenomicPrediction/data/input_files/phenotypes.csv"))
+rownames(pheno) <- pheno[,1]
+pheno <- pheno[,-1]
+mode(pheno) <- "numeric"
+pheno[1:5,1:5]
+dim(pheno)
+
+# remove individuals with missing phenotypic data from genotype matrix
+dim(W)
+W <- W[rownames(W)%in%rownames(pheno),] 
+dim(W)
+
+```
+
+Cross-validation script adapted from: https://figshare.com/articles/R_Script_for_cross-validation_/5712208
+
+Not sure this is quite the type of cross-validation we should aim for - want 3 fold with one fold hold out; currently we are just randomly sampling 2/3 for the training set and 1/3 for the validation set and repeating this 100x without any hold out. 
+
+Other note: could be MUCH more efficient; consider scaling up on server but this works for now
+
+```{r rrblup}
+# impute missing markers using A.mat - not necessary (no missing markers in this data)
+# impute <- A.mat(W, max.missing = 0.5, impute.method = "mean", return.imputed = TRUE)
+# sum(is.na(impute$imputed))
+# markers_impute <- impute$imputed
+
+trainsize <- 70 # default for rrBLUP - almost 3-fold CV? not quite but kind of 
+iter <- 100 # number of iterations for CV
+
+# establish training and testing sets
+N <- rownames(W)
+# may need to modify this part (rounding can be tricky, may have < or > 312 individuals total)
+trainset <- round(length(N) * (trainsize/100))
+testset <- round(length(N) - trainset)
+
+# matrix to hold results of each iteration
+rrblup_res <- matrix(NA, iter, 2) # 100 iterations, two columns for predictive accuracy and coefficients
+
+# loop through iterations (for Total free amino acids)
+train <- matrix(NA, trainset, iter)
+test <- matrix(NA, testset, iter)
+
+# not sure about sampling procedure - would be better to do 10 fold and this is not quite right I think?
+for (i in 1:iter) {
+  train[,i] <- sample(N, size = trainset, replace = FALSE)
+  test[,i] <- setdiff(N, train[,i])
+  # use above to pull out the records correpsonding to these (pheno and geno)
+  geno_train <- W[train[,i],]
+  geno_test <- W[test[,i],]
+  pheno_train <- pheno[train[,i], "Total"]
+  pheno_test <- pheno[test[,i], "Total"]
+ 
+  # generate marker effects
+  mxslv <-  mixed.solve(pheno_train, Z = geno_train, K=NULL, SE=FALSE, return.Hinv=FALSE)
+  TPr <- mxslv$u # BLUPs
+  eff <- as.matrix(TPr)
+  
+  # predict in the test set
+  pred_test <- geno_test %*% eff # predictions for test set
+  predictions <- pred_test + as.vector(mxslv$beta) # predictions + mean for test set
+   
+  # predictive ability
+  pa <- cor(predictions, pheno_test, use = "complete")
+
+  # caluclate the bias by regressing the phenotypes (y) on the GEBVs (x)
+  reg <- lm(pheno_test ~ predictions)
+  
+  # extract the predictionsHD coefficient from the reg object
+  coef <- summary(reg)$coefficients[2,1]
+
+  # Store the results
+  rrblup_res[i,1] <- pa
+  rrblup_res[i,2] <- coef
+}
+
+colnames(rrblup_res) <- c("pa", "coef")
+rrblup_res <- as.data.frame(rrblup_res)
+cat("mean predictive accuracy for total free amino acids (rrBLUP):", mean(rrblup_res$pa))
+
+```
+
+## Genomic feature prediction simulation
+Likelihood method
+
+Starting with a simulation provided in the qgg package documentation for function `gfm`
+
+### Step 1: simulate genomic relationship matrix and phenotype
+
+```{r grm and pheno}
+# genomic feature model with likelihood method
+# simulate genomic relationship matrix
+W_sim <- matrix(rnorm(2000000), ncol = 10000)
+colnames(W_sim) <- as.character(1:ncol(W_sim))
+W_sim[1:5,1:5]
+
+# simulate phenotype 
+y <- rowSums(W_sim[,1:10]) + rowSums(W_sim[, 1001:1010]) + rnorm(nrow(W_sim)) # true model
+```
+
+### Step 2: define model and genomic feature lists
+```{r gfm example}
+# simple example
+data <- data.frame(y = y, mu = 1)
+fm <- y ~ mu
+
+# genomic feature lists
+setsGB <- list(A = colnames(W_sim)) # GBLUP model
+setsGF <- list(C1 = colnames(W_sim)[1:1000], C2 = colnames(W_sim)[1001:2000], C3 = colnames(W_sim)[2000:10000]) # all markers split into sets
+setsGT <- list(C1 = colnames(W_sim)[1:10], C2 = colnames(W_sim)[1001:1010], C3 = colnames(W_sim)[1:10000]) # true model
+```
+
+### Step 3: run model with 3 fold cross validation & 100 replications
+```{r run reml!}
+# REML analyses and cross validation
+# three fold cross validation, 100 replications
+n <- length(y)
+fold <- 3
+nsets <- 100
+
+validate <- replicate(nsets, sample(1:n, as.integer(n/fold)))
+
+fitGB <- gfm(fm = fm, W = W_sim, sets = setsGB, data = data, validate = validate) # why does standard GBLUP have such low predictive accuracy?
+fitGF <- gfm(fm = fm, W = W_sim, sets = setsGF, data = data, validate = validate)
+fitGT <- gfm(fm = fm, W = W_sim, sets = setsGT, data = data, validate = validate)
+
+cat("mean predictive accuracy for simulatino (genomic feature GBLUP):", mean(fitGB$pa), "\n")
+cat("mean predictive accuracy for simulation (genomic feature model):", mean(fitGF$pa), "\n")
+cat("mean predictive accuracy for simulation (genomic feature true model):", mean(fitGT$pa))
+```
+
+## Genomic feature prediction for real data 
+
+**Notes**  
+
+* the Glist function works fine, but cannot retrieve the genomic relationship matrix using getW (only returns SNP names)  
+
+* predictive ability is low when running a standard GBLUP model (our null model) using this method  
+
+
+```{r grm for real data}
+# Glist <- prepG(bedfiles="data/input_nomissing.bed",
+#                bimfiles="data/input_nomissing.bim",
+#                famfiles="data/input_nomissing.fam", study="AA-gfblup",
+#                fnRAW="data/test.out")
+
+##############################
+# ERROR: returns a null vector
+# W_gfm <- getW(Glist) 
+##############################
+
+### recode GRM using plink input from snpmatrix
+W_gfm <- coerce(plink_file$genotypes, to = "character")
+
+W_gfm[W_gfm == "A/A"] <- 0 # homozygous AA 
+W_gfm[W_gfm == "A/B"] <- 1 # heterozygote AB
+W_gfm[W_gfm == "B/B"] <- 2 # homozygous BB
+
+mode(W_gfm) <- "numeric"
+
+rownames(W_gfm) <- paste0("A", rownames(W_gfm)) # append A to rownames
+
+W_gfm[1:10,1:10]
+
+# specify model
+fm_real <- Total ~ 1 # maybe this is not an appropriate formula? No sig PCs for this trait
+
+# specify snp sets (all genomic snps)
+all_snps <- list(A = colnames(W_gfm))
+
+# convert phenotype data to to data frame
+pheno_df <- as.data.frame(pheno)
+
+# set validation parameters
+n <- length(pheno_df$Total)
+fold <- 3
+nsets <- 100
+
+validate <- replicate(nsets, sample(1:n, as.integer(n/fold)))
+
+
+# run the model! 
+res_gfm <- gfm(fm = fm_real, W = W_gfm, sets = all_snps, validate = validate, data = pheno_df)
+
+cat("mean predictive accuracy for total free amino acids (genomic feature GBLUP):", mean(res_gfm$pa))
+
+```
+
+## What the heck is going on?
+
+```{r plot results}
+results <- cbind(rrblup_res$pa, res_gfm$pa)
+colnames(results) <- c("rrBLUP", "GFM")
+results <- as.data.frame(results)
+results_long <- gather(results)
+results_long$key <- factor(results_long$key, levels = c("rrBLUP", "GFM"))
+
+boxplot(results_long$value ~ results_long$key, main = "Predictive ability for total free amino acids", 
+        col = c("lightblue", "darkblue"))
+
+```
