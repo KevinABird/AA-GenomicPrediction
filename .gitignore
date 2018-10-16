@@ -29,6 +29,9 @@ data/CS_subsets/*
 data/GS_subset/*
 .Rproj.user*
 plink*
+gfblup_results
+slurm-logs
+clean.sh
 
 # OS generated files #
 ######################

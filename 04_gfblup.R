@@ -33,9 +33,17 @@ print(pheno)
 # load principal components
 pcs <- read.table("data/input_files/principal_components.txt", header=TRUE)
 
-pcs <- pcs[rownames(pcs) %in% phenotypes$Taxa,]
+### clean up missing data
+p_missing <- phenotypes$Taxa[is.na(phenotypes[,pheno])]
+
+phenotypes <- phenotypes[!phenotypes$Taxa %in% p_missing,]
+
+pcs <- pcs[!rownames(pcs) %in% p_missing,]
+
+W <- W[!rownames(W) %in% p_missing,]
 
 input_data <- cbind(phenotypes, pcs)
+
 
 ###############################################################################################################
 # set up cross validation
