@@ -28,7 +28,7 @@
 data/CS_subsets/*
 data/GS_subset/*
 .Rproj.user*
-.plink*
+plink*
 
 # OS generated files #
 ######################
