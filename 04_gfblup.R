@@ -51,7 +51,7 @@ input_data <- cbind(phenotypes, pcs)
 
 n <- nrow(W)
 fold <- 10
-nsets <- 1000
+nsets <- 50
 
 # ids for validation sets
 validate <- replicate(nsets, sample(1:n, as.integer(n / fold))) # matrix input
@@ -122,23 +122,23 @@ for (i in 1:1000){
   setsC <- list(C = m, G = gs) # define SNP set for gfblup model using random snps
   
   # fit the model!
-  fitC <- gfm(fm = fm, W = W, sets = setsC, data = input_data, validate = validate, mkplots = TRUE)
+  fitC <- gfm(fm = fm, W = W, sets = setsC, data = input_data, validate = validate, mkplots = FALSE)
   
   # export variances
   df_c <- as.data.frame(fitC$sigmas)
   cs_results <- rbind(cs_results, df_c)
+  write.table(cs_results, paste0("gfblup_results/cs_sigmas_", pheno, ".txt"))
   
   # export log likelihood
   llik <- fitC$fit$llik
   cs_llik <- rbind(cs_llik, llik)
+  write.table(cs_llik, paste0("gfblup_results/cs_llik_", pheno, ".txt"))
   
   # export predictive accuracy 
   pa <- mean(fitC$pa)
   cs_pa <- rbind(cs_pa, pa)
+  write.table(cs_pa, paste0("gfblup_results/cs_pa_", pheno, ".txt"))
   
   cat("Done!\n")
 }
 
-write.table(cs_results, paste0("gfblup_results/cs_sigmas_", pheno, ".txt"))
-write.table(cs_llik, paste0("gfblup_results/cs_llik_", pheno, ".txt"))
-write.table(cs_pa, paste0("gfblup_results/cs_pa_", pheno, ".txt"))
