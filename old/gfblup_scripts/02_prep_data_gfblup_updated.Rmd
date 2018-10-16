@@ -1,0 +1,111 @@
+---
+title: "Prepare data for GFBLUP"
+author: "S. Turner"
+date: "January 31, 2018"
+output: html_document
+---
+## Summary
+This script prepares the phenotype file and genotype matrix (W) to run GBLUP and GFBLUP
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir="~/Documents/AA-GenomicPrediction/")
+library(qgg)
+library(snpStats) # need to install with bioclite
+```
+
+## Load and prepare data
+
+### Phenotype and co-variable data
+Note: no co-variable info for this data (previously accounted for)
+Removes individuals with missing phenotypid data and writes out clean file ('phenotypes.csv')
+```{r phenotypes}
+
+phenotypes <- read.csv("./data/input_files/AfterBlupsAbsLevels04222014.csv")
+phenotypes$Taxa <- paste0("A", phenotypes$Taxa) # append 'A' to taxa names
+phenotypes <- phenotypes[-78,] # remove individual with no genotypic data
+ratios <- read.csv("./data/input_files/Blup-transformedforGWAS.csv", header=TRUE)
+ratios$Taxa <- paste0("A", ratios$Taxa)
+phenotypes <- merge(phenotypes, ratios, by = "Taxa")
+phenotypes <- replace(phenotypes, is.na(phenotypes), NA)
+write.csv(phenotypes, "./data/input_files/phenotypes.csv", row.names=FALSE)
+
+```
+
+### Generate Glist
+This list contains information about raw and processed genotypes from bed/bin/fam files
+```{r glist}
+
+Glist <- prepG(bedfiles="./data/GS_subset/plinkGeneOmeSubset.bed",
+               bimfiles="./data/GS_subset/plinkGeneOmeSubset.bim",
+               famfiles="./data/GS_subset/plinkGeneOmeSubset.fam", study="AA-gfblup",
+               fnRAW="./data/GS_subset/plinkGeneOmeSubset.out")
+
+# add A to genotype ids
+Glist$ids <- paste0("A", Glist$ids)
+
+```
+
+### Compute W from Glist
+The genotype matrix (W) is computed from Glist as a binary file. W is a centered and scaled genotype matrix (rows = genotypes, columns = markers)
+
+```{r compute W from Glist}
+
+# extract rsids
+rsids <- unlist(Glist$rsids)
+W <- getW(Glist, rsids = rsids)
+dim(W)
+
+W <- W[rownames(W)%in%phenotypes$Taxa,] # remove individuals with missing phenotypic data
+
+# extract names of SNPs with missing data and remove from W
+m_missing <- colnames(W)[colSums(is.na(W)) > 0] # markers with missing data in full set
+W <- W[,!colSums(is.na(W)) > 0]
+W <- scale(W, center=TRUE, scale=TRUE)
+dim(W)
+
+write.matrix(W, "./data/input_files/W_mat.txt")
+
+G <- (W %*% t(W)) / ncol(W)
+dim(G)
+
+write.matrix(G, "./data/input_files/G_mat2.txt")
+
+```
+
+### Markers for amino acid subset
+Can do this more easily in plink.. but just need to do it once so oh well 
+```{r marker data for amino acid subset}
+
+# get SNP names for AAS
+W_aas <- read.plink(bed="./data/AAS_subset/plinkAASubset.bed", bim="./data/AAS_subset/plinkAASubset.bim", fam="./data/AAS_subset/plinkAASubset.fam", na.strings=c("-9"), sep=".")
+
+# extract marker names for AAS
+m_aas <- colnames(W_aas$genotypes@.Data)
+
+rm(W_aas)
+
+write.table(m_aas, "./data/input_files/aas_snplist.txt")
+
+```
+
+### Markers for control subsets
+Note: removed markers with missing data
+
+```{r marker data for control subsets}
+# use list of markers with missing values to remove missing data in control subsets
+for (i in 1:1000){
+  path <- paste("./data/control_markers/plink_control_snplist_", i, ".txt", sep="")
+  m_control <- read.table(path)
+  m_control <- as.character(m_control[,1])
+  m_control <- grep(paste(m_missing, collapse="|"), m_control, value=TRUE, invert=TRUE)
+  print(length(m_control))
+  write.table(m_control, paste("./data/control_markers/plink_control_snplist_", i, ".txt", sep=""))
+}
+
+rm(i, path, m_control)
+
+```
+
+```{r save rdata}
+save.image(file="./data/input_files/gfblup_input.Rdata")
+```

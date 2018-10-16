@@ -1,0 +1,8 @@
+#!/bin/bash
+
+for i in {1..1000}
+do
+    	 plink --noweb --ped ./CSSplink/plinkrandomSubset_${i}.ped --map ./CSSplink/plinkrandomSubset_${i}.map --write-snplist
+	 mv plink.snplist ./control_markers/plink_control_snplist_${i}.txt
+done
+	 
