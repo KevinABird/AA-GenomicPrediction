@@ -2,7 +2,13 @@
 ##  GFBLUP for Arabidopsis amino acid panel
 ##  This script runs the a genomic feature model for amino acid traits 
 ##  S. Turner
-##  Jan. 31 2018; Updated Oct 15 2018
+##  Jan. 31 2018; Updated Oct 16 2018
+###############################################################################################################
+
+###############################################################################################################
+# TODO
+# add principal components (see previous model selection results from GAPIT)
+# generic input for marker classes (to test multiple pathways)
 ###############################################################################################################
 
 # load libraries
@@ -10,8 +16,9 @@ library(qgg)
 
 ###############################################################################################################
 ## Load and prepare data
+###############################################################################################################
 
-load("./data/input_files/gfblup_input.Rdata")
+load("data/input_files/gfblup_input.Rdata")
 # use command line arguments
 args <- commandArgs(trailingOnly=TRUE)
 index <- as.numeric(args[1])
@@ -19,89 +26,111 @@ traits <- colnames(phenotypes[,2:54])
 pheno <- traits[index]
 print(pheno)
 
-# load principal components
-pcs <- read.table("./data/input_files/principal_components.txt", header=TRUE)
-
 ###############################################################################################################
-### Run GBLUP (infintesimal model)
-# remove individuals with missing phenotypes
-# p_missing <- phenotypes$Taxa[is.na(phenotypes[,pheno])]
-# phenotypes <- phenotypes[!phenotypes$Taxa %in% p_missing,]
-# G <- G[!rownames(G) %in% p_missing, !colnames(G) %in% p_missing]
-# W <- W[!rownames(W) %in% p_missing,]
-# L <- ncol(G)
+### TODO: EDIT THIS SECTION IN PREP DATA SCRIPT
+###############################################################################################################
+
+# load principal components
+pcs <- read.table("data/input_files/principal_components.txt", header=TRUE)
+
 pcs <- pcs[rownames(pcs) %in% phenotypes$Taxa,]
 
-# create lists of subsets for different models
-# setsGB <- list(F=colnames(W)) # define SNP set for gblup model - not really necessary?
+input_data <- cbind(phenotypes, pcs)
 
-# formula
-# fm <- as.formula(paste(pheno[1], "~", "PC1", "+", "PC2", sep=""))
-fm <- ifelse(pheno[1]=="val", paste0(pheno[1], "~ PC1 + PC2"), paste0(pheno[1], "~ 1"))
-fm <- as.formula(fm)
-print(fm)
+###############################################################################################################
+# set up cross validation
+###############################################################################################################
 
-# parameters for REML analyses and cross validation
 n <- nrow(W)
 fold <- 10
-nsets <- 100
+nsets <- 1000
 
 # ids for validation sets
 validate <- replicate(nsets, sample(1:n, as.integer(n / fold))) # matrix input
 
-input_data <- cbind(phenotypes, pcs)
+###############################################################################################################
+### Run GBLUP (infintesimal model)
+###############################################################################################################
 
-# standard gblup model
-# dir.create(paste0("./gfblup_results/", pheno, "/"))
+setsGB <- list(G = colnames(W)) # define SNP set for gblup model
 
-fitGB <- gfm(fm=fm, W=W, data=input_data, validate=validate, mkplots=FALSE)
-# save(fitGB, file=paste0("./gfblup_results/", pheno, "/gblup_", pheno, ".RData"))
-fitGB$sigmas
+# formula
+fm <- ifelse(pheno[1]=="val", paste0(pheno[1], "~ PC1 + PC2"), paste0(pheno[1], "~ 1"))
+fm <- as.formula(fm)
+print(fm)
+
+fitGB <- gfm(fm = fm, W = W, sets = setsGB, data = input_data, validate = validate, mkplots = FALSE)
+
+# export variances
 df_gs <- as.data.frame(fitGB$sigmas)
-write.table(df_gs, paste0("./gfblup_results/gs_sigmas_", pheno, ".txt"))
-gs_llik <- fitGB$fit$llik
-write.table(gs_llik, paste0("./gfblup_results/gs_llik_", pheno, ".txt"))
-gs_pa <- as.data.frame(fitGB$pa)
-write.table(gs_pa, paste0("./gfblup_results/gs_pa_", pheno, ".txt"))
+write.table(df_gs, paste0("gfblup_results/gs_sigmas_", pheno, ".txt"))
 
+# export log likelihood
+gs_llik <- fitGB$fit$llik
+write.table(gs_llik, paste0("gfblup_results/gs_llik_", pheno, ".txt"))
+
+# export predictive accuracy
+gs_pa <- as.data.frame(fitGB$pa)
+write.table(gs_pa, paste0("gfblup_results/gs_pa_", pheno, ".txt"))
+
+###############################################################################################################
 ## GFBLUP - AA set
-setsAA <- list(AA = m_aas, G = rownames(W)
-fitAA <- gfm(fm=fm, W=W, sets=setsAA, data=input_data, validate=validate, mkplots=FALSE)
-# save(fitAA, file=paste0("./gfblup_results/", pheno, "/fitAA_", pheno, ".RData"))
-fitAA$sigmas
+###############################################################################################################
+
+setsAA <- list(AA = m_aas, G = colnames(W)[!colnames(W) %in% m_aas])
+
+fitAA <- gfm(fm = fm, W = W, sets = setsAA, data = input_data, validate = validate, mkplots = FALSE)
+
+# export variances
 df_aa <- as.data.frame(fitAA$sigmas)
-write.table(df_aa, paste0("./gfblup_results/aa_sigmas_", pheno, ".txt"))
+write.table(df_aa, paste0("gfblup_results/aa_sigmas_", pheno, ".txt"))
+
+# export log likelihood
 aa_llik <- fitAA$fit$llik
 write.table(aa_llik, paste0("./gfblup_results/aa_llik_", pheno, ".txt"))
+
+# export predictive accuracy
 aa_pa <- as.data.frame(fitAA$pa)
 write.table(aa_pa, paste0("./gfblup_results/aa_pa_", pheno, ".txt"))
 
+###############################################################################################################
 ## GFBLUP - control sets
-# gfblup model comparing AAS and CS subsets
-# exports input for binomial test
+###############################################################################################################
+
+# set up empty objects to store results
 cs_results <- NULL
 cs_llik <- NULL
 cs_pa <- NULL
 
+# loop through subsets (probably a more efficient way to do this)
 for (i in 1:1000){
   print(i)
+  
   # read in control marker data
-  m_control <- read.table(paste0("./data/control_markers/plink_control_snplist_", i, ".txt"))
-  m_control <- as.character(m_control[,1])
+  m <- m_control[,i]
+  gs <- colnames(W)[!colnames(W) %in% m] # all other snps
+  
   # define marker sets
-  setsC <- list(C=m_control) # define SNP set for gfblup model using random snps
+  setsC <- list(C = m, G = gs) # define SNP set for gfblup model using random snps
+  
   # fit the model!
-  fitC <- gfm(fm=fm, W=W, sets=setsC, data=input_data, validate=validate, mkplots=FALSE)
-  # save(fitC, file=paste("./gfblup_results/", pheno, "/fitC_", pheno, i, ".RData", sep=""))
-  # export sigmas and log likelihoods
+  fitC <- gfm(fm = fm, W = W, sets = setsC, data = input_data, validate = validate, mkplots = TRUE)
+  
+  # export variances
   df_c <- as.data.frame(fitC$sigmas)
-  llik <- fitC$fit$llik
-  pa <- mean(fitC$pa)
   cs_results <- rbind(cs_results, df_c)
+  
+  # export log likelihood
+  llik <- fitC$fit$llik
   cs_llik <- rbind(cs_llik, llik)
+  
+  # export predictive accuracy 
+  pa <- mean(fitC$pa)
   cs_pa <- rbind(cs_pa, pa)
-  write.table(cs_results, paste0("./gfblup_results/cs_sigmas_", pheno, ".txt"))
-  write.table(cs_llik, paste0("./gfblup_results/cs_llik_", pheno, ".txt"))
-  write.table(cs_pa, paste0("./gfblup_results/cs_pa_", pheno, ".txt"))
+  
   cat("Done!\n")
 }
+
+write.table(cs_results, paste0("gfblup_results/cs_sigmas_", pheno, ".txt"))
+write.table(cs_llik, paste0("gfblup_results/cs_llik_", pheno, ".txt"))
+write.table(cs_pa, paste0("gfblup_results/cs_pa_", pheno, ".txt"))

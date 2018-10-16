@@ -7,7 +7,6 @@ output: html_document
 
 ## load libraries 
 ```{r libraries}
-knitr::opts_knit$set(root.dir="~/Documents/AA-GenomicPrediction/")
 library(pcadapt)
 library(ggplot2)
 library(gridExtra)
@@ -18,7 +17,7 @@ library(RColorBrewer)
 
 ## PCA for full marker set
 ```{r full data}
-path_to_full <- "./data/GS_subset/plinkGeneOmeSubset.ped"
+path_to_full <- "data/GS_subset/plinkGeneOmeSubset.ped"
 full <- read.pcadapt(path_to_full, type="ped")
 full_x <- pcadapt(full, K=20)
 
