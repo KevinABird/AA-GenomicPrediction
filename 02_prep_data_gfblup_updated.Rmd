@@ -1,0 +1,104 @@
+---
+title: "Prepare data for GFBLUP"
+author: "S. Turner"
+date: "15 October 2018"
+output: html_document
+---
+## Summary
+This script prepares the phenotype file and genotype matrix (W) to run GBLUP and GFBLUP
+
+```{r setup, include=FALSE}
+library(qgg)
+library(snpStats) # need to install with bioclite
+```
+
+## Load and prepare data
+
+### Phenotype and co-variable data
+Note: no co-variable info for this data (previously accounted for)
+Removes individuals with missing phenotypid data and writes out clean file ('phenotypes.csv')
+```{r phenotypes}
+phenotypes <- read.csv("data/input_files/AfterBlupsAbsLevels04222014.csv")
+phenotypes$Taxa <- paste0("A", phenotypes$Taxa) # append 'A' to taxa names
+# phenotypes <- phenotypes[-78,] # remove individual with no genotypic data
+ratios <- read.csv("data/input_files/Blup-transformedforGWAS.csv", header=TRUE)
+ratios$Taxa <- paste0("A", ratios$Taxa)
+phenotypes <- merge(phenotypes, ratios, by = "Taxa")
+phenotypes <- replace(phenotypes, is.na(phenotypes), NA)
+str(phenotypes)
+names(phenotypes) <- gsub( x = names(phenotypes), pattern = "Gly", replacement = "gly")
+names(phenotypes) <- gsub( x = names(phenotypes), pattern = "try", replacement = "tyr")
+
+```
+
+### Genotype matrix
+The genotype matrix (W) is computed from Glist as a binary file. W is a centered and scaled genotype matrix (rows = genotypes, columns = markers) coded in {0,1,2} format.
+
+```{r genotype matrix}
+
+### recode GRM using plink input from snpmatrix
+
+# read in and format SNP data (must be {-1, 0, 1} format)
+plink_file <- read.plink(bed = "data/GS_subset/input_nomissing.bed", 
+                   bim = "data/GS_subset/input_nomissing.bim",
+                   fam = "data/GS_subset/input_nomissing.fam")
+
+W <- coerce(plink_file$genotypes, to = "character")
+
+W[W == "A/A"] <- 0 # homozygous AA 
+W[W == "A/B"] <- 1 # heterozygote AB
+W[W == "B/B"] <- 2 # homozygous BB
+
+mode(W) <- "numeric"
+
+rownames(W) <- paste0("A", rownames(W)) # append A to rownames
+
+W[1:10,1:10]
+
+# check that phenotype accessions are in same order as genotype matrix
+phenotypes <- phenotypes[match(rownames(W), phenotypes$Taxa),]
+write.csv(phenotypes, "data/input_files/phenotypes.csv", row.names=FALSE)
+
+# write.matrix(W, "data/input_files/genotype_matrix.txt")
+
+```
+
+### Markers for amino acid subset
+Can do this more easily in plink.. but just need to do it once so oh well 
+```{r marker data for amino acid subset}
+
+# get SNP names for AAS
+W_aas <- read.plink(bed="data/AAS_subset/plinkAASubset.bed", bim="data/AAS_subset/plinkAASubset.bim", fam="data/AAS_subset/plinkAASubset.fam", na.strings=c("-9"), sep=".")
+
+# extract marker names for AAS
+m_aas <- colnames(W_aas$genotypes@.Data)
+
+rm(W_aas)
+
+write.table(m_aas, "data/input_files/aas_snplist.txt")
+
+```
+
+### Markers for control subsets
+
+```{r marker data for control subsets}
+# use list of markers with missing values to remove missing data in control subsets
+m_control <- NULL
+
+for (i in 1:1000){
+  path <- paste("data/CS_subsets/plinkrandomSubset_", i, ".map", sep="")
+  m <- read.table(path)
+  m <- as.character(m[,2])
+  m <- m[m %in% colnames(W)] # check that markers are in genotype matrix
+  m_control <- cbind(m, m_control)
+  # write.table(m_control, paste("data/input_files/control_markers/plink_control_snplist_", i, ".txt", sep=""), col.names = FALSE, row.names = FALSE)
+}
+
+colnames(m_control) <- paste0("C", 1:1000)
+
+```
+
+```{r save rdata}
+rm(i, path, plink_file, ratios, m)
+save.image(file="data/input_files/gfblup_input.Rdata")
+```
