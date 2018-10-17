@@ -25,13 +25,12 @@
 *.log
 *.sql
 *.sqlite
-data/CS_subsets/*
-data/GS_subset/*
 .Rproj.user*
 plink*
 gfblup_results
 slurm-logs
 clean.sh
+data/
 
 # OS generated files #
 ######################
