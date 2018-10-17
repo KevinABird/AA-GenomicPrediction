@@ -31,6 +31,7 @@ gfblup_results
 slurm-logs
 clean.sh
 data/
+pathways/
 
 # OS generated files #
 ######################
