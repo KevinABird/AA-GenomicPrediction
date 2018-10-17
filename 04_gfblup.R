@@ -70,16 +70,16 @@ print(fm)
 fitGB <- gfm(fm = fm, W = W, sets = setsGB, data = input_data, validate = validate, mkplots = FALSE)
 
 # export variances
-df_gs <- as.data.frame(fitGB$sigmas)
-write.table(df_gs, paste0("gfblup_results/gs_sigmas_", pheno, ".txt"))
+# df_gs <- as.data.frame(fitGB$sigmas)
+write.table(fitGB$sigmas, paste0("gfblup_results2/gs_sigmas_", pheno, ".txt"))
 
 # export log likelihood
 gs_llik <- fitGB$fit$llik
-write.table(gs_llik, paste0("gfblup_results/gs_llik_", pheno, ".txt"))
+write.table(gs_llik, paste0("gfblup_results2/gs_llik_", pheno, ".txt"))
 
 # export predictive accuracy
 gs_pa <- as.data.frame(fitGB$pa)
-write.table(gs_pa, paste0("gfblup_results/gs_pa_", pheno, ".txt"))
+write.table(gs_pa, paste0("gfblup_results2/gs_pa_", pheno, ".txt"))
 
 ###############################################################################################################
 ## GFBLUP - AA set
@@ -90,16 +90,16 @@ setsAA <- list(AA = m_aas, G = colnames(W)[!colnames(W) %in% m_aas])
 fitAA <- gfm(fm = fm, W = W, sets = setsAA, data = input_data, validate = validate, mkplots = FALSE)
 
 # export variances
-df_aa <- as.data.frame(fitAA$sigmas)
-write.table(df_aa, paste0("gfblup_results/aa_sigmas_", pheno, ".txt"))
+# df_aa <- as.data.frame(fitAA$sigmas)
+write.table(fitAA$sigmas, paste0("gfblup_results2/aa_sigmas_", pheno, ".txt"))
 
 # export log likelihood
 aa_llik <- fitAA$fit$llik
-write.table(aa_llik, paste0("./gfblup_results/aa_llik_", pheno, ".txt"))
+write.table(aa_llik, paste0("./gfblup_results2/aa_llik_", pheno, ".txt"))
 
 # export predictive accuracy
 aa_pa <- as.data.frame(fitAA$pa)
-write.table(aa_pa, paste0("./gfblup_results/aa_pa_", pheno, ".txt"))
+write.table(aa_pa, paste0("./gfblup_results2/aa_pa_", pheno, ".txt"))
 
 ###############################################################################################################
 ## GFBLUP - control sets
@@ -125,19 +125,20 @@ for (i in 1:1000){
   fitC <- gfm(fm = fm, W = W, sets = setsC, data = input_data, validate = validate, mkplots = FALSE)
   
   # export variances
-  df_c <- as.data.frame(fitC$sigmas)
+  # df_c <- as.data.frame(fitC$sigmas)
+  df_c <- fitC$sigmas
   cs_results <- rbind(cs_results, df_c)
-  write.table(cs_results, paste0("gfblup_results/cs_sigmas_", pheno, ".txt"))
+  write.table(cs_results, paste0("gfblup_results2/cs_sigmas_", pheno, ".txt"))
   
   # export log likelihood
   llik <- fitC$fit$llik
   cs_llik <- rbind(cs_llik, llik)
-  write.table(cs_llik, paste0("gfblup_results/cs_llik_", pheno, ".txt"))
+  write.table(cs_llik, paste0("gfblup_results2/cs_llik_", pheno, ".txt"))
   
   # export predictive accuracy 
   pa <- mean(fitC$pa)
   cs_pa <- rbind(cs_pa, pa)
-  write.table(cs_pa, paste0("gfblup_results/cs_pa_", pheno, ".txt"))
+  write.table(cs_pa, paste0("gfblup_results2/cs_pa_", pheno, ".txt"))
   
   cat("Done!\n")
 }
