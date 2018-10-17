@@ -63,6 +63,28 @@ write.csv(phenotypes, "data/input_files/phenotypes.csv", row.names=FALSE)
 
 ```
 
+```{r pca}
+library(pcadapt)
+
+path <- "data/GS_subset/input_nomissing.bed"
+filename <- read.pcadapt(path, type = "bed")
+
+x <- pcadapt(input = filename, K = 20)
+
+plot(x, option = "screeplot")
+
+plot(x, option = "scores")
+
+test <- prcomp(W, scale = TRUE)
+
+summary(test)
+
+library(ggfortify)
+autoplot(test)
+
+```
+
+
 ### Markers for amino acid subset
 Can do this more easily in plink.. but just need to do it once so oh well 
 ```{r marker data for amino acid subset}
