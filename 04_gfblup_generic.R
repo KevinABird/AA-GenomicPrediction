@@ -25,6 +25,8 @@ index <- as.numeric(args[1])
 traits <- colnames(phenotypes[,2:54])
 pheno <- traits[index]
 print(pheno)
+path <- args[2]
+print(path)
 
 ###############################################################################################################
 ### TODO: EDIT THIS SECTION IN PREP DATA SCRIPT
