@@ -107,15 +107,15 @@ fitGF <- gfm(fm = fm, W = W, sets = setsGF, data = input_data, validate = valida
 
 # export variances
 df_gf <- as.data.frame(fitGF$sigmas)
-write.table(fitGF$sigmas, paste0(dir, "gf_sigmas_", pheno, ".txt"))
+write.table(fitGF$sigmas, paste0(dir, "/gf_sigmas_", pheno, ".txt"))
 
 # export log likelihood
 gf_llik <- fitGF$fit$llik
-write.table(gf_llik, paste0(dir, "gf_llik_", pheno, ".txt"))
+write.table(gf_llik, paste0(dir, "/gf_llik_", pheno, ".txt"))
 
 # export predictive accuracy
 gf_pa <- as.data.frame(fitGF$pa)
-write.table(gf_pa, paste0(dir, "gf_pa_", pheno, ".txt"))
+write.table(gf_pa, paste0(dir, "/gf_pa_", pheno, ".txt"))
 
 ###############################################################################################################
 ## GFBLUP - control sets
