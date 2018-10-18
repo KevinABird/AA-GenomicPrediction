@@ -28,6 +28,10 @@ print(pheno)
 path <- args[2]
 print(path)
 
+dir <- paste0("gfblup_results/", unlist(strsplit(path, "/"))[2])
+
+dir.create(paste0("gfblup_results/", unlist(strsplit(path, "/"))[2]))
+
 ###############################################################################################################
 ### TODO: EDIT THIS SECTION IN PREP DATA SCRIPT
 ###############################################################################################################
@@ -102,16 +106,16 @@ setsGF <- list(S = markers, G = colnames(W)[!colnames(W) %in% markers])
 fitGF <- gfm(fm = fm, W = W, sets = setsGF, data = input_data, validate = validate, mkplots = FALSE)
 
 # export variances
-df_aa <- as.data.frame(fitAA$sigmas)
-write.table(df_aa, paste0("gfblup_results/aa_sigmas_", pheno, ".txt"))
+df_gf <- as.data.frame(fitGF$sigmas)
+write.table(fitGF$sigmas, paste0(dir, "gf_sigmas_", pheno, ".txt"))
 
 # export log likelihood
-aa_llik <- fitAA$fit$llik
-write.table(aa_llik, paste0("gfblup_results/aa_llik_", pheno, ".txt"))
+gf_llik <- fitGF$fit$llik
+write.table(gf_llik, paste0(dir, "gf_llik_", pheno, ".txt"))
 
 # export predictive accuracy
-aa_pa <- as.data.frame(fitAA$pa)
-write.table(aa_pa, paste0("gfblup_results/aa_pa_", pheno, ".txt"))
+gf_pa <- as.data.frame(fitGF$pa)
+write.table(gf_pa, paste0(dir, "gf_pa_", pheno, ".txt"))
 
 ###############################################################################################################
 ## GFBLUP - control sets
